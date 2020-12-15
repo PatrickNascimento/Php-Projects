@@ -15,3 +15,5 @@ $ php chat.php
 E então abra o arquivo `chat.html`.
 
 Os mesmos passos podem ser usados para abrir o _EchoServer_ em `server.php`.
+
+.....
