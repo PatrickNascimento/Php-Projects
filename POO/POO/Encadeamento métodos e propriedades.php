@@ -19,7 +19,7 @@ return $this;
 }
 
 $bmw = new Car();
-// Adicionado 10 galoes da gasolina para rodar 40 km
+// Adicionado 45 galoes da gasolina para rodar 500 km
 //e pegando o numero de galoes do tanque
 $tanque = $bmw -> fill(45) -> ride(500) -> tanque;
 // Imprime o resultado na tela
