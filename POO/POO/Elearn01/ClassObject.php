@@ -1,5 +1,7 @@
 <?php
-#classe Notífica.php
+#classe Notífica.php Php Orientado a Objetos
+
+
 
 class noticias {
 

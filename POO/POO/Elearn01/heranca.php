@@ -25,3 +25,6 @@ $noticia->image = "php.jpg";
 
 $noticia->exibeNoticias();
 
+
+/** Php Orientado objeto */
+

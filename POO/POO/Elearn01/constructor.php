@@ -1,5 +1,5 @@
 <?php
-#Noticia constructor
+#Noticia constructor Php Orientado Objetos
 
 class noticia
 {
