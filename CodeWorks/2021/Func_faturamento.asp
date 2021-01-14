@@ -1,0 +1,173 @@
+'FINALIZADO 14/01/2021
+
+'╔═════════════════════════════════════════════════════════════════╗
+'║ **** FUNÇÃO PARA UNIFICAR CLIENTE COM MULPLICOS CADASTROS ****  ║
+'╚═════════════════════════════════════════════════════════════════╝
+
+Function UnificarClientesMultiploCadastros(COD_CLIENTE,TIPO)
+
+Set UNIFIQUE = Server.CreateObject("ADODB.Recordset")
+UNIFIQUE.ActiveConnection = MM_ConexaoDC_STRING
+UNIFIQUE.Source = "SELECT COUNT(CPF_CLIENTE) AS numreg, "_
+			&" CPF_CLIENTE, SUM(VAL_COBRANCA) AS TotalCobranca "_			 
+			&" FROM [SIAF_PLUS].producao.CLIENTES c INNER JOIN [SIAF_PLUS].producao.COBRANCAS o ON o.COD_CLIENTE=c.COD_CLIENTE "_
+			&" WHERE COD_TIPO_COBRANCA= "& TIPO &" AND c.COD_PROVEDOR=1 "_			
+			&" AND (((STA_COBRANCA IN ('ATIVO','CANCELADO','CJ - REGULARIZANDO')) AND (GER_COBRANCA=1)) or (STA_COBRANCA='BLOQUEADO' AND DATEDIFF(d,DTB_COBRANCA,GETDATE())<30)) "_
+			&" AND (VAL_COBRANCA> 0 AND (VAL_PROMO_COBRANCA>0 OR (VAL_PROMO_COBRANCA=0 AND (EXP_PROMO_COBRANCA IS NULL OR EXP_PROMO_COBRANCA<=GETDATE())))) "_
+			&" AND NOT EXISTS (SELECT COD_COBRANCA FROM [SIAF_PLUS].producao.MENSALIDADES "_
+		 	 			&"   WHERE o.COD_COBRANCA = COD_COBRANCA AND (DATEDIFF(d, GETDATE(), DAT_VENC_MENSALIDADE) >= 7) AND COD_TIPO_COBRANCA="& TIPO &" ) "_
+						&"	 AND CPF_CLIENTE = (SELECT CPF_CLIENTE FROM [SIAF_PLUS].producao.CLIENTES  WHERE COD_CLIENTE = "& COD_CLIENTE &") "_
+						&"	 group by CPF_CLIENTE "_
+						&"	 having count(CPF_CLIENTE) > 1 "
+
+UNIFIQUE.CursorType = 0
+UNIFIQUE.CursorLocation = 2
+UNIFIQUE.LockType = 1
+UNIFIQUE.Open()
+
+IF not UNIFIQUE.EOF THEN
+	VALORCOBRANCA = UNIFIQUE("TotalCobranca")   
+END IF	
+
+IF VALORCOBRANCA <> "" THEN
+	Dim UPDATEUNIFIQUE
+	set UPDATEUNIFIQUE = Server.CreateObject("ADODB.Command")
+	UPDATEUNIFIQUE.ActiveConnection = MM_ConexaoDC_STRING
+	UPDATEUNIFIQUE.CommandText = "IF exists (SELECT * FROM [SIAF_PLUS].producao.COBRANCAS WHERE COD_CLIENTE = "& COD_CLIENTE &")  UPDATE  [SIAF_PLUS].producao.COBRANCAS SET VAL_COBRANCA = " & VALORCOBRANCA & " WHERE COD_CLIENTE= "& COD_CLIENTE	
+	response.write(UPDATEUNIFIQUE.CommandText)
+UPDATEUNIFIQUE.execute()
+END IF
+
+
+'╔══════════════════════════════════════════════════════════════════════════════════════════════╗
+'║ **** 'ADICIONAR AS COBRANÇAS E SERVIÇOS DOS CLIENTES UNIFICADOS NO CLIENTE UNIFICADOR. ****  ║
+'╚══════════════════════════════════════════════════════════════════════════════════════════════╝
+
+DIM DELETESERVICOSUNIFICADO
+set DELETESERVICOSUNIFICADO = Server.CreateObject("ADODB.Command")
+	DELETESERVICOSUNIFICADO.ActiveConnection = MM_ConexaoDC_STRING
+	DELETESERVICOSUNIFICADO.CommandText = "DELETE FROM SIAF_PLUS.producao.COBRANCAS_SERVICOS WHERE COD_COBRANCA= "& COD_CLIENTE	
+	DELETESERVICOSUNIFICADO.Execute()
+
+
+DIM UNIFIQUESERVICOS
+SET UNIFIQUESERVICOS = Server.CreateObject("ADODB.Recordset")
+UNIFIQUESERVICOS.ActiveConnection = MM_ConexaoDC_STRING
+UNIFIQUESERVICOS.Source = "INSERT INTO SIAF_PLUS.producao.COBRANCAS_SERVICOS (COD_COBRANCA,COD_SERVICO,QTD_COBR_SERV,INS_COBR_SERV,VAL_COBR_SERV,VAL_PROMO_COBR_SERV,DAT_FATURA_COBR_SERV) "_
+&" SELECT " & COD_CLIENTE &" AS COD_COBRANCA,COD_SERVICO,QTD_COBR_SERV,INS_COBR_SERV,SUM(VAL_COBR_SERV) AS TOTAL,VAL_PROMO_COBR_SERV,(SELECT GETDATE()-DAY(GETDATE())+1) AS DAT_FATURA_COBR_SERV "_
+&" FROM SIAF_PLUS.PRODUCAO.CLIENTES CLI "_
+&" JOIN SIAF_PLUS.producao.COBRANCAS C ON cli.COD_CLIENTE = c.COD_CLIENTE "_
+&" JOIN SIAF_PLUS.producao.COBRANCAS_SERVICOS CS ON C.COD_COBRANCA = CS.COD_COBRANCA "_	
+&" WHERE CPF_CLIENTE = (SELECT CPF_CLIENTE FROM SIAF_PLUS.producao.CLIENTES WHERE COD_CLIENTE = "& COD_CLIENTE &") AND CLI.COD_CLIENTE <> "& COD_CLIENTE &" "_
+&" AND CS.DAT_FATURA_COBR_SERV < GETDATE() "_
+&" GROUP BY COD_SERVICO,QTD_COBR_SERV,INS_COBR_SERV,VAL_PROMO_COBR_SERV" 
+
+UNIFIQUESERVICOS.Open()
+
+End Function
+
+'╔══════════════════════════════════════════════════════════════════════════════════════════════╗
+'║ **** MONTA PDF DEMONSTRATIVO PARA CLIENTE UNIFICADO, ESPECIFICANDO OS SERVIÇOS INDIVIDUAIS*  ║
+'╚══════════════════════════════════════════════════════════════════════════════════════════════╝
+
+Function GeraPdfServicosUnificado(COD_CLIENTE)
+
+DIM UNIFIQUEPDF
+SET UNIFIQUEPDF = Server.CreateObject("ADODB.Recordset")
+UNIFIQUEPDF.ActiveConnection = MM_ConexaoDC_STRING
+UNIFIQUEPDF.Source = "SELECT CLI.COD_CLIENTE, CLI.NOM_CLIENTE, CLI.APELIDO,  S.DES_SERVICO AS SERVICO, QTD_COBR_SERV, VAL_COBR_SERV AS VALOR "_
+&" FROM SIAF_PLUS.PRODUCAO.CLIENTES CLI "_
+&" JOIN SIAF_PLUS.producao.COBRANCAS C ON cli.COD_CLIENTE = c.COD_CLIENTE "_
+&" JOIN SIAF_PLUS.producao.COBRANCAS_SERVICOS CS ON C.COD_COBRANCA = CS.COD_COBRANCA "_	
+&" JOIN SIAF_PLUS.producao.SERVICOS S ON S.COD_SERVICO = CS.COD_SERVICO "_
+&" WHERE CPF_CLIENTE = (SELECT CPF_CLIENTE FROM SIAF_PLUS.producao.CLIENTES WHERE COD_CLIENTE = " & COD_CLIENTE &") AND CLI.COD_CLIENTE <> "& COD_CLIENTE &" "_
+&" AND CS.DAT_FATURA_COBR_SERV < GETDATE() "
+UNIFIQUEPDF.Open()
+
+DIM TOTALPDF
+SET TOTALPDF = Server.CreateObject("ADODB.Recordset")
+TOTALPDF.ActiveConnection = MM_ConexaoDC_STRING
+TOTALPDF.Source = "SELECT SUM(VAL_COBR_SERV) AS VALOR "_
+&" FROM SIAF_PLUS.PRODUCAO.CLIENTES CLI "_
+&" JOIN SIAF_PLUS.producao.COBRANCAS C ON cli.COD_CLIENTE = c.COD_CLIENTE "_
+&" JOIN SIAF_PLUS.producao.COBRANCAS_SERVICOS CS ON C.COD_COBRANCA = CS.COD_COBRANCA "_	
+&" JOIN SIAF_PLUS.producao.SERVICOS S ON S.COD_SERVICO = CS.COD_SERVICO "_
+&" WHERE CPF_CLIENTE = (SELECT CPF_CLIENTE FROM SIAF_PLUS.producao.CLIENTES WHERE COD_CLIENTE = " & COD_CLIENTE &") AND CLI.COD_CLIENTE <> "& COD_CLIENTE &" "_
+&" AND CS.DAT_FATURA_COBR_SERV < GETDATE() "
+TOTALPDF.Open()
+
+VALORTOTAL   = ""&FORMATNUMBER(TOTALPDF("VALOR"),2)&"" 
+
+'OBTEM O MES DE REFERENCIA
+DIM MESPRESTACAO
+SET MESPRESTACAO = Server.CreateObject("ADODB.Recordset")
+MESPRESTACAO.ActiveConnection = MM_ConexaoDC_STRING
+MESPRESTACAO.Source = "select MES_PRESTACAO from SIAF_PLUS.producao.MENSALIDADES where COD_CLIENTE = " & COD_CLIENTE &""
+MESPRESTACAO.Open
+MESAPURACAO = MESPRESTACAO("MES_PRESTACAO")
+ 
+HTML = HTML & "<html>"
+HTML = HTML & "<head>"
+HTML = HTML & "<font face='calibri'>"                     
+HTML = HTML & "<style>"
+HTML = HTML & "table, th, td {"
+HTML = HTML & "border: 1px solid black;"
+HTML = HTML & "border-collapse: collapse;"
+HTML = HTML & "} th, td {"
+HTML = HTML & "padding: 5px;"
+HTML = HTML & "} th {"
+HTML = HTML & "text-align: left;"
+HTML = HTML & "}"
+HTML = HTML & "</style>"
+HTML = HTML & "</head>"
+HTML = HTML & "<body>"
+HTML = HTML & "<h3>APURACAO DOS SERVICOS REFERENTE AO MES "&MESAPURACAO&"</h3>"
+HTML = HTML & "<p>CLIENTE : ASSOCIACAO DOS REGISTRADORES CIVIS DAS PESSOAS DE SC - ARPEN</p>"
+HTML = HTML & "<table style='width:1000'>"
+HTML = HTML & "<tr>"
+HTML = HTML & "<th>CADASTRO</th>"
+HTML = HTML & "<th>SERVICO</th>"
+HTML = HTML & "<th>QUANTIDADE</th>"
+HTML = HTML & "<th>VALOR</th>"
+HTML = HTML & "</tr>"
+
+While NOT UNIFIQUEPDF.EOF
+COD_CLIENTE = UNIFIQUEPDF("COD_CLIENTE")   
+APELIDO = UNIFIQUEPDF("APELIDO")   
+SERVICO = UNIFIQUEPDF("SERVICO")   
+QTDE = UNIFIQUEPDF("QTD_COBR_SERV")   
+VALOR   = ""&FORMATNUMBER(UNIFIQUEPDF("VALOR"),2)&"" 
+
+HTML = HTML & "<tr>"
+HTML = HTML & "<td>"& APELIDO &"</td>"
+HTML = HTML & "<td>"& SERVICO &"</td>"
+HTML = HTML & "<td style='text-align: center'>"& QTDE &"</td>"
+HTML = HTML & "<td style='text-align: right'> R$ "& VALOR &"</td>"
+HTML = HTML & "</tr>"
+
+UNIFIQUEPDF.MoveNext()	
+Wend
+
+HTML = HTML & "</table>"
+HTML = HTML & "<table style='width:1000'> <tR>"
+HTML = HTML & "<td WIDTH=555>SUBTOTAL</td>"
+HTML = HTML & "<td style='text-align: right'> <B>R$ "& VALORTOTAL &"</B></td>"
+HTML = HTML & "</table>"
+HTML = HTML & "</body>"
+HTML = HTML & "</html>"
+
+'response.write(HTML)
+
+While NOT UNIFIQUEPDF.EOF
+
+APELIDO = UNIFIQUEPDF("APELIDO")   
+SERVICO = UNIFIQUEPDF("SERVICO")   
+VALOR   = ""&FORMATNUMBER(UNIFIQUEPDF("VALOR"),2)&"" 
+
+UNIFIQUEPDF.MoveNext()	
+Wend
+
+'enviar_email Session("email_usuario"), "Cadastro", "contato@arpen-sc.org.br", Assunto, HTML
+'###########################################################
+'DESCOMENTAR A LINHA DE CIMA PARA ENVIAR AO USUÁRIO CORRETO.
+ enviar_email "noreply@engeplus.com.br", "Cadastro", "psn1462@gmail.com", "Assunto", HTML
