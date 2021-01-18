@@ -248,62 +248,8 @@ body {
    
    
    
-   <%
+   <%   
    
-   	' Vendas - Associar comissionado sem ades�o
-   	'
-   	'% >
-    '<table width="830" border="0" align="center" cellpadding="0" cellspacing="0">
-    ' <tr>
-    '   <td><img src="imagens/abas/vendas.gif"  border="0"></td>
-    ' </tr>
-    '</table>
-   	'<table width="830" border="0" align="center" cellpadding="1" cellspacing="1" style="border:1px solid #666666 ">
-    ' <tr>
-    '   <td width="302" valign="middle" bgcolor="#666666"><strong><font color="#FFFFFF" size="2" face="Verdana, Arial, Helvetica, sans-serif">&nbsp;Nome</font></strong></td>
-    '   <td width="280" bgcolor="#666666" ><strong><font color="#FFFFFF" size="2" face="Verdana, Arial, Helvetica, sans-serif">&nbsp;Servi&ccedil;o</font></strong></td>
-    '   <td width="236" bgcolor="#666666" ><strong><font color="#FFFFFF" size="2" face="Verdana, Arial, Helvetica, sans-serif">&nbsp;Vendedor</font></strong></td>
-    ' </tr>
-    ' <% 
-	'
-	' Abre Objeto de Comissionados
-	'Set COMISSIONADOS = Server.CreateObject("ADODB.Recordset")
-	'COMISSIONADOS.ActiveConnection = MM_Conexao_STRING
-	'
-   	'DO WHILE NOT NOVOS2.EOF 
- 	'	% >
-    ' <tr bgcolor="#EDEDED" onMouseOver="javascript:className='LinhaAtiva'" onMouseOut="javascript:className=''">
-    '   <td width="302" height="25" valign="middle">
-    '   <font size="1" face="Verdana, Arial, Helvetica, sans-serif">&nbsp;<%=(NOVOS2.Fields.Item("NOME").Value)% ></font></td>
-    '   <td width="280" ><font size="1" face="Verdana, Arial, Helvetica, sans-serif"> &nbsp;<%=lcase(NOVOS2.Fields.Item("SERVICO").Value)% ></font></td>
-    '   <td width="236" align="left" > &nbsp;
-    '     <%
-	'	
-	'	
-	'	' Lista Comissionados do Servi&ccedil;o Selecionado
-	'	COMISSIONADOS.Source = "SELECT NOM_COMISSIONADO, COD_SC  FROM SERVICOS_COMISSIONADOS S, COMISSIONADOS C WHERE C.COD_COMISSIONADO=S.COD_COMISSIONADO AND S.COD_SERVICO="& NOVOS2("COD_SERVICO") &" AND (C.COD_PROVEDOR="& Session("cod_provedor") &") AND APENAS_VENDA_SC=1  ORDER BY NOM_COMISSIONADO"
-	'	COMISSIONADOS.Open()
-	'
-	'	% >
-    '       <select name="COMISSIONADO_<%=NOVOS2("COD_COBRANCA")% >_<%=NOVOS2("COD_SERVICO")% >" class="Campo9" id="COMISSIONADO_<%=NOVOS2("COD_COBRANCA")% >_<%=NOVOS2("COD_SERVICO")% >">
-    '         <% if COMISSIONADOS.EOF Then % ><option value="0">ENGEPLUS</option><% End If % >
-	'		 <% 
-	'	 DO WHILE NOT COMISSIONADOS.EOF 
-	'		% >
-    '         <option value="<%=COMISSIONADOS("COD_SC") % >"><%=(COMISSIONADOS("NOM_COMISSIONADO"))% ></option>
-    '         <% 	
-	'		COMISSIONADOS.MOVENEXT
-	'	 LOOP 
-	'	 COMISSIONADOS.Close()
-	'	 % >
-    '       </select>       </td>
-    ' </tr>
-    ' <%    
-	'	NOVOS2.MOVENEXT
-    'LOOP 
-	'% >
-   	'</table>
-    '<br>
     %>
     
    <br>
