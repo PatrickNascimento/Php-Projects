@@ -1,0 +1,15 @@
+<script>
+    $.urlParam = function(name){
+    var results = new RegExp('[\?&]' + name + '=([^&#]*)').exec(window.location.href);
+    return results[1] || 0;
+}
+
+    if ($('#servico  option:selected').text  ) { console.log($( "#myselect option:selected" ).text()) }
+        $('#servico').on('change', function () { 
+
+            console.log($.urlParam('servico'));	
+              console.log('Changed option value ' + this.value);
+              console.log('Changed option text ' + $(this).find('option').filter(':selected').text());
+    });
+    
+ </script>
